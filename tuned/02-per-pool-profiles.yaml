@@ -1,0 +1,90 @@
+# Different TuneD profiles on different worker pools. Pair each pool with taints and
+# tolerations so only the intended workloads land on it.
+apiVersion: os.kubernetes.vmware.com/v1alpha1
+kind: TuneDProfile
+metadata:
+  name: redis-profile
+  namespace: my-vsphere-namespace
+spec:
+  content: |
+    [main]
+    summary=Redis
+    include=latency-performance
+
+    [vm]
+    transparent_hugepages=never
+
+    [sysctl]
+    vm.overcommit_memory=1
+    vm.swappiness=1
+---
+apiVersion: os.kubernetes.vmware.com/v1alpha1
+kind: TuneDProfile
+metadata:
+  name: faas-profile
+  namespace: my-vsphere-namespace
+spec:
+  content: |
+    [main]
+    summary=Serverless density
+    include=throughput-performance
+
+    [sysfs]
+    /sys/kernel/mm/ksm/run=1
+    /sys/kernel/mm/ksm/pages_to_scan=100
+
+    [sysctl]
+    vm.swappiness=20
+---
+apiVersion: cluster.x-k8s.io/v1beta2
+kind: Cluster
+metadata:
+  name: my-cluster
+  namespace: my-vsphere-namespace
+spec:
+  clusterNetwork:
+    services:
+      cidrBlocks: ["198.201.0.0/16"]
+    pods:
+      cidrBlocks: ["193.0.0.0/16"]
+    serviceDomain: cluster.local
+  topology:
+    classRef:
+      name: builtin-generic-v3.6.0
+      namespace: vmware-system-vks-public
+    version: v1.34.1---vmware.1-vkr.1
+    controlPlane:
+      replicas: 3
+    workers:
+      machineDeployments:
+      - class: node-pool
+        name: redis-pool
+        replicas: 3
+        variables:
+          overrides:
+          - name: osConfiguration            # <-- tuned (redis-pool)
+            value:
+              tuned:
+                active: [redis-performance]
+                profiles:
+                  redis-performance:
+                    profileRef:
+                      name: redis-profile
+      - class: node-pool
+        name: faas-pool
+        replicas: 10
+        variables:
+          overrides:
+          - name: osConfiguration            # <-- tuned (faas-pool)
+            value:
+              tuned:
+                active: [faas-density]
+                profiles:
+                  faas-density:
+                    profileRef:
+                      name: faas-profile
+    variables:
+    - name: vmClass
+      value: best-effort-small
+    - name: storageClass
+      value: <storage-class>

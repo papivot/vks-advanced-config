@@ -1,0 +1,13 @@
+# Every CRS below selects clusters by this label. Add it to your Cluster
+# (patch an existing one, or set it in metadata.labels when creating).
+#   kubectl label cluster.cluster.x-k8s.io/my-cluster -n my-vsphere-namespace crs-baseline=enabled
+apiVersion: cluster.x-k8s.io/v1beta2
+kind: Cluster
+metadata:
+  name: my-cluster
+  namespace: my-vsphere-namespace
+  labels:
+    crs-baseline: enabled          # baseline example (01)
+    crs-pkg: enabled               # package repo/install example (02)
+    registry-secret: required      # pull-secret example (03)
+# spec: ... (unchanged; builtin-generic-v3.x ClusterClass topology)

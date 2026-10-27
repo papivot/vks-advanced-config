@@ -1,0 +1,53 @@
+# Example 1: baseline namespace, quota and RBAC in every labelled guest cluster.
+# CRS and its ConfigMap live in the Supervisor namespace, same as the Cluster.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: baseline-manifests
+  namespace: my-vsphere-namespace
+data:
+  namespace.yaml: |
+    apiVersion: v1
+    kind: Namespace
+    metadata:
+      name: platform
+      labels:
+        pod-security.kubernetes.io/enforce: baseline
+  quota.yaml: |
+    apiVersion: v1
+    kind: ResourceQuota
+    metadata:
+      name: default-quota
+      namespace: platform
+    spec:
+      hard:
+        requests.cpu: "8"
+        requests.memory: 16Gi
+        pods: "50"
+  rbac.yaml: |
+    apiVersion: rbac.authorization.k8s.io/v1
+    kind: ClusterRoleBinding
+    metadata:
+      name: platform-viewers
+    roleRef:
+      apiGroup: rbac.authorization.k8s.io
+      kind: ClusterRole
+      name: view
+    subjects:
+      - apiGroup: rbac.authorization.k8s.io
+        kind: Group
+        name: platform-viewers
+---
+apiVersion: addons.cluster.x-k8s.io/v1beta2
+kind: ClusterResourceSet
+metadata:
+  name: baseline
+  namespace: my-vsphere-namespace
+spec:
+  strategy: Reconcile            # re-apply when the ConfigMap changes
+  clusterSelector:
+    matchLabels:
+      crs-baseline: enabled
+  resources:
+    - kind: ConfigMap
+      name: baseline-manifests

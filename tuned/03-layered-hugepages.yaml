@@ -1,0 +1,61 @@
+# Layered profiles: the built-in baseline plus a custom profile that sets kernel boot
+# arguments (1G hugepages, IOMMU). Profiles apply in `active` order; later ones override
+# earlier ones. Boot-argument changes need a node reboot, which VKS performs for you.
+# Validate on a dedicated pool first.
+apiVersion: os.kubernetes.vmware.com/v1alpha1
+kind: TuneDProfile
+metadata:
+  name: hugepages-v1
+  namespace: my-vsphere-namespace
+spec:
+  content: |
+    [main]
+    summary=1G hugepages and IOMMU
+
+    [bootloader]
+    cmdline_hp=+default_hugepagesz=1G hugepagesz=1G hugepages=1 intel_iommu=on iommu=pt
+---
+apiVersion: cluster.x-k8s.io/v1beta2
+kind: Cluster
+metadata:
+  name: my-cluster
+  namespace: my-vsphere-namespace
+spec:
+  clusterNetwork:
+    services:
+      cidrBlocks: ["198.201.0.0/16"]
+    pods:
+      cidrBlocks: ["193.0.0.0/16"]
+    serviceDomain: cluster.local
+  topology:
+    classRef:
+      name: builtin-generic-v3.6.0
+      namespace: vmware-system-vks-public
+    version: v1.34.1---vmware.1-vkr.1
+    controlPlane:
+      replicas: 3
+    workers:
+      machineDeployments:
+      - class: node-pool
+        name: hugepages-pool
+        replicas: 3
+        variables:
+          overrides:
+          - name: osConfiguration            # <-- tuned (layered)
+            value:
+              tuned:
+                active:                      # every listed profile must be injected below
+                - builtin-vks
+                - hugepages
+                profiles:
+                  builtin-vks:
+                    profileRef:
+                      name: builtin-vks-v3.6.0
+                  hugepages:
+                    profileRef:
+                      name: hugepages-v1
+    variables:
+    - name: vmClass
+      value: best-effort-small
+    - name: storageClass
+      value: <storage-class>

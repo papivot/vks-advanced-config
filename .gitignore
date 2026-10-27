@@ -1,0 +1,18 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Editors / IDEs
+.idea/
+.vscode/
+*.swp
+*~
+
+# Local credentials and cluster access (never commit)
+*.kubeconfig
+kubeconfig*
+*.token
+*.pem
+*.key
+.env

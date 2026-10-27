@@ -1,0 +1,65 @@
+# Ubuntu Pro together with FIPS mode and a system proxy.
+# FIPS needs a FIPS Kubernetes release (the version name contains "fips").
+# To verify: systemProxy values are also applied to the Pro client's proxy settings, so you
+# should not need to repeat them under ubuntuPro.settings. Not stated in the public docs;
+# confirm with `sudo pro config show` on a node.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: ubuntu-pro-token
+  namespace: my-vsphere-namespace
+type: Opaque
+stringData:
+  token: <your-ubuntu-pro-token>
+---
+apiVersion: cluster.x-k8s.io/v1beta2
+kind: Cluster
+metadata:
+  name: my-cluster
+  namespace: my-vsphere-namespace
+spec:
+  clusterNetwork:
+    services:
+      cidrBlocks: ["198.201.0.0/16"]
+    pods:
+      cidrBlocks: ["193.0.0.0/16"]
+    serviceDomain: cluster.local
+  topology:
+    classRef:
+      name: builtin-generic-v3.6.0
+      namespace: vmware-system-vks-public
+    version: <fips-kubernetes-release>       # for example v1.33.1---vmware.1-fips-vkr.2
+    controlPlane:
+      replicas: 3
+      metadata:
+        annotations:
+          run.tanzu.vmware.com/resolve-os-image: os-name=ubuntu
+    workers:
+      machineDeployments:
+      - class: node-pool
+        name: worker-pool
+        replicas: 3
+        metadata:
+          annotations:
+            run.tanzu.vmware.com/resolve-os-image: os-name=ubuntu
+    variables:
+    - name: vmClass
+      value: best-effort-small
+    - name: storageClass
+      value: <storage-class>
+    - name: osConfiguration                  # <-- ubuntuPro + fips + systemProxy
+      value:
+        fips:
+          enabled: true
+        systemProxy:
+          http: http://proxy.example.com:3128
+          https: http://proxy.example.com:3128
+        ubuntuPro:
+          tokenSecretRef: ubuntu-pro-token
+          services:
+          - esm-infra
+          - esm-apps
+          - livepatch
+          settings:                          # Pro client settings (key/value strings)
+          - key: apt_news                    # example only: Pro client option that toggles APT news messages; replace with a setting you need or remove
+            value: "false"

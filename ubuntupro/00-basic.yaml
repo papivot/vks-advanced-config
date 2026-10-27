@@ -1,0 +1,56 @@
+# Attach Ubuntu Pro to every Ubuntu node in the cluster.
+# The Secret must be in the Cluster's namespace, with a key named "token" and no trailing
+# newline. Equivalent command:
+#   kubectl create secret generic ubuntu-pro-token -n my-vsphere-namespace --from-literal token=<pro-token>
+apiVersion: v1
+kind: Secret
+metadata:
+  name: ubuntu-pro-token
+  namespace: my-vsphere-namespace
+type: Opaque
+stringData:
+  token: <your-ubuntu-pro-token>             # from https://ubuntu.com/pro/dashboard
+---
+apiVersion: cluster.x-k8s.io/v1beta2
+kind: Cluster
+metadata:
+  name: my-cluster
+  namespace: my-vsphere-namespace
+spec:
+  clusterNetwork:
+    services:
+      cidrBlocks: ["198.201.0.0/16"]
+    pods:
+      cidrBlocks: ["193.0.0.0/16"]
+    serviceDomain: cluster.local
+  topology:
+    classRef:
+      name: builtin-generic-v3.6.0           # ubuntuPro needs v3.3.0 or later
+      namespace: vmware-system-vks-public
+    version: v1.34.1---vmware.1-vkr.1
+    controlPlane:
+      replicas: 3
+      metadata:
+        annotations:
+          run.tanzu.vmware.com/resolve-os-image: os-name=ubuntu
+    workers:
+      machineDeployments:
+      - class: node-pool
+        name: worker-pool
+        replicas: 3
+        metadata:
+          annotations:
+            run.tanzu.vmware.com/resolve-os-image: os-name=ubuntu
+    variables:
+    - name: vmClass
+      value: best-effort-small
+    - name: storageClass
+      value: <storage-class>
+    - name: osConfiguration                  # <-- ubuntuPro
+      value:
+        ubuntuPro:
+          tokenSecretRef: ubuntu-pro-token
+          services:
+          - esm-infra
+          - esm-apps
+          - livepatch

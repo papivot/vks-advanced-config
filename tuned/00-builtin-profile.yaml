@@ -1,0 +1,40 @@
+# Activate the VKS-shipped TuneD profile on every Linux node in the cluster.
+# builtin-vks-v3.6.0 is opt-in and is referenced by name only.
+apiVersion: cluster.x-k8s.io/v1beta2
+kind: Cluster
+metadata:
+  name: my-cluster
+  namespace: my-vsphere-namespace
+spec:
+  clusterNetwork:
+    services:
+      cidrBlocks: ["198.201.0.0/16"]
+    pods:
+      cidrBlocks: ["193.0.0.0/16"]
+    serviceDomain: cluster.local
+  topology:
+    classRef:
+      name: builtin-generic-v3.6.0
+      namespace: vmware-system-vks-public
+    version: v1.34.1---vmware.1-vkr.1        # tuned needs Kubernetes v1.34.0 or later
+    controlPlane:
+      replicas: 3
+    workers:
+      machineDeployments:
+      - class: node-pool
+        name: worker-pool
+        replicas: 3
+    variables:
+    - name: vmClass
+      value: best-effort-small
+    - name: storageClass
+      value: <storage-class>
+    - name: osConfiguration                  # <-- tuned
+      value:
+        tuned:
+          active:
+          - builtin-vks                      # profile name on the node
+          profiles:
+            builtin-vks:
+              profileRef:
+                name: builtin-vks-v3.6.0

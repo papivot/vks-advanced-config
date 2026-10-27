@@ -1,0 +1,36 @@
+# Enable AIDE (host file integrity monitoring) on every Linux node in the cluster.
+# Needs ClusterClass builtin-generic-v3.8.0 or later and Kubernetes release 1.37 or later.
+apiVersion: cluster.x-k8s.io/v1beta2
+kind: Cluster
+metadata:
+  name: my-cluster
+  namespace: my-vsphere-namespace
+spec:
+  clusterNetwork:
+    services:
+      cidrBlocks: ["198.201.0.0/16"]
+    pods:
+      cidrBlocks: ["193.0.0.0/16"]
+    serviceDomain: cluster.local
+  topology:
+    classRef:
+      name: builtin-generic-v3.8.0
+      namespace: vmware-system-vks-public
+    # To verify: the Kubernetes 1.37 minimum for AIDE comes from VKS behavior, not the public variable docs.
+    version: v1.37.1---vmware.1-vkr.1        # AIDE needs Kubernetes 1.37 or later
+    controlPlane:
+      replicas: 3
+    workers:
+      machineDeployments:
+      - class: node-pool
+        name: worker-pool
+        replicas: 3
+    variables:
+    - name: vmClass
+      value: best-effort-small
+    - name: storageClass
+      value: <storage-class>
+    - name: osConfiguration                  # <-- aide
+      value:
+        aide:
+          enabled: true                      # default false

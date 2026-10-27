@@ -1,0 +1,92 @@
+# Example 2: two-stage CRS that installs a Carvel package repository and then a package.
+# Stage 1 installs a Carvel PackageRepository, stage 2 installs a PackageInstall from it.
+# kapp-controller is already running in VKS guest clusters. REPLACE every <placeholder>.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: pkgr-manifests
+  namespace: my-vsphere-namespace
+data:
+  namespace.yaml: |
+    apiVersion: v1
+    kind: Namespace
+    metadata:
+      name: my-addons
+  pkgr.yaml: |
+    apiVersion: packaging.carvel.dev/v1alpha1
+    kind: PackageRepository
+    metadata:
+      name: my-repo
+      namespace: my-addons
+    spec:
+      fetch:
+        imgpkgBundle:
+          image: <registry>/<path>/my-packages:<tag>
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: pkgi-manifests
+  namespace: my-vsphere-namespace
+data:
+  rbac-and-install.yaml: |
+    apiVersion: v1
+    kind: ServiceAccount
+    metadata:
+      name: my-app-sa
+      namespace: my-addons
+    ---
+    apiVersion: rbac.authorization.k8s.io/v1
+    kind: ClusterRoleBinding
+    metadata:
+      name: my-app-sa-admin       # tighten for production
+    roleRef:
+      apiGroup: rbac.authorization.k8s.io
+      kind: ClusterRole
+      name: cluster-admin
+    subjects:
+      - kind: ServiceAccount
+        name: my-app-sa
+        namespace: my-addons
+    ---
+    apiVersion: packaging.carvel.dev/v1alpha1
+    kind: PackageInstall
+    metadata:
+      name: my-app
+      namespace: my-addons
+    spec:
+      serviceAccountName: my-app-sa
+      packageRef:
+        refName: <package-ref-name>
+        versionSelection:
+          constraints: "<version>"
+---
+apiVersion: addons.cluster.x-k8s.io/v1beta2
+kind: ClusterResourceSet
+metadata:
+  name: pkgr
+  namespace: my-vsphere-namespace
+spec:
+  strategy: Reconcile
+  clusterSelector:
+    matchLabels:
+      crs-pkg: enabled
+  resources:
+    - kind: ConfigMap
+      name: pkgr-manifests
+---
+# Separate CRS so the repo is applied first. CRS gives no ordering guarantee between
+# resources, but PackageInstall retries until the repository has synced.
+apiVersion: addons.cluster.x-k8s.io/v1beta2
+kind: ClusterResourceSet
+metadata:
+  name: pkgi
+  namespace: my-vsphere-namespace
+spec:
+  strategy: Reconcile
+  clusterSelector:
+    matchLabels:
+      crs-pkg: enabled
+  resources:
+    - kind: ConfigMap
+      name: pkgi-manifests
