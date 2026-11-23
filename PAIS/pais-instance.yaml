@@ -1,0 +1,133 @@
+# Private AI Services instance for the vSphere Namespace "pais", applied with kubectl.
+# Based on the working object "default" in namespace pais. Replace every <...> value first.
+#
+#   kubectl --context <ctx> apply -f pais-instance.yaml
+#
+# Order matters little: the controller waits for the Secrets, but creating them first is cleaner.
+# The object MUST be named "default" (the controller reports its results to PAISConfiguration "default").
+
+# ---------------------------------------------------------------------------------------------
+# 1. Login users for the built-in "staticCredentials" provider (lab / proof-of-concept use only).
+#    credentials.json is a JSON list. Each entry has:
+#      userID   a unique id you choose
+#      username the login name
+#      hash     a SHA-512 crypt hash ("$6$<salt>$<hash>", 106 characters), NOT the plain password.
+#    Create a hash with:   openssl passwd -6 'the-password'
+#    Example uses password of "Vmware1!" 
+# ---------------------------------------------------------------------------------------------
+apiVersion: v1
+kind: Secret
+metadata:
+  name: pais-static-credentials
+  namespace: pais
+type: Opaque
+stringData:
+  credentials.json: |
+    [
+      {
+        "userID": "test",
+        "username": "testuser",
+        "hash": "$6$J7DDi1Vjo8o/CcIU$ziy57OO4VBO37lzaztY4wuav1EbXwvdZ4qWUVKUAuQStXXCobmNHjVlp1SqnaACOZwK4HeOGCOs3U7ioTzMy5/"
+      }
+    ]
+---
+# ---------------------------------------------------------------------------------------------
+# 2. Password (and CA) for the PostgreSQL database.
+#    "password"  the database user's password, as plain text.
+#    "ca.crt"    REQUIRED KEY. PEM of the CA that signed the database's TLS certificate.
+#                The vSphere wizard will not save an empty certificate, and the setup job fails with
+#                "references non-existent secret key: ca.crt" if the key is missing. In this lab the
+#                database has no TLS and sslMode is Allow, so the value below is a DUMMY self-signed
+#                certificate (CN=placeholder-ca, no private key kept). It is never used to verify anything.
+#                With sslMode Require, VerifyCA or VerifyFull, put the real CA PEM here and enable TLS
+#                on the database first.
+# ---------------------------------------------------------------------------------------------
+apiVersion: v1
+kind: Secret
+metadata:
+  name: pais-database
+  namespace: pais
+type: Opaque
+stringData:
+  password: "<database-password>"
+  # This is a place holder dummy CA if there is postgres is not behind TLS.
+  ca.crt: |
+    -----BEGIN CERTIFICATE-----
+    MIIC8jCCAdqgAwIBAgIUBYmp45fG5QU/s15ZgFFFpQ8QKYowDQYJKoZIhvcNAQEL
+    BQAwGTEXMBUGA1UEAwwOcGxhY2Vob2xkZXItY2EwHhcNMjYxMTIzMDA1OTQwWhcN
+    MzYxMTIwMDA1OTQwWjAZMRcwFQYDVQQDDA5wbGFjZWhvbGRlci1jYTCCASIwDQYJ
+    KoZIhvcNAQEBBQADggEPADCCAQoCggEBALZpDh89j0wHNIEtqK1k3uhegqxBM1FP
+    AMOp0J0fwVxPGgJGYKBLs/BzKmOGdqXDvuR7QnYiAtS3zLIHbzBmCDm8T1XGHktZ
+    44uJ4Dk9z3HzQRLtfBd6jM+Ee7CKlRpVyn5ZAFVTsbNk2USSG4387hdb+4kfUHRa
+    2B69AFJ4Nn5lzP70dXRrwvuTrOCGomMwpTFGdj33srGEPFU3ZHTrO0Oh4jjDsg3g
+    kscNLxrS2Nbhxn3rTREE7kCQpFQNtUFucqYjcIheDM2TOk7l0VDiOwJ+X3bYD8eT
+    YFnfxBK0mZWMsjGaU6jN3MuqjHFVKiCkwIyryf8MoZOEjtUJHwRVg+ECAwEAAaMy
+    MDAwHQYDVR0OBBYEFP8umJfOLehkoDC8TZ3lQj1Q2v7EMA8GA1UdEwEB/wQFMAMB
+    Af8wDQYJKoZIhvcNAQELBQADggEBACB6PPv/YDcbb6frSbWmowWNw6qSqpQJYxe4
+    ho9hmyDsz+yWNXFjaECB4iQ3ItBHII/jQZoQ21/9Rt3Iz3PGYea9jpDzQc81v/QR
+    VCG4XXsfzjH9YSw/b7ku/9hQ9ady29CH/FXgR5vGjUydRQjY1j+zQyxKohRqUVf1
+    YFazp+K0jxzNUEK2aH+fd1rIzNtnoyi+JexTtQj/CkmI9FqG/U92pVEPI0NRT4lC
+    CZJknlDbdS0NHKA9APZMaybKUPtILN7vQ6oa/xJSfUtOxeH8vf4dR3K0wR6+2wgR
+    zkbHM4SFVxaNWIPPd4Q3sDRq6xojrQS1zLZaI/7rwH/OInRwu88=
+    -----END CERTIFICATE-----
+---
+apiVersion: pais.vmware.com/v1alpha1
+kind: PAISConfiguration
+metadata:
+  name: default
+  namespace: pais
+  annotations:
+    pais.vmware.com/default-failure-domain: zone0
+    ui.pais.vmware.com/pais-enablement-db: self-managed
+    ui.pais.vmware.com/pais-enablement-environment-connectivity: connected
+    # FQDN the UI uses instead of the load balancer IP when switching between its components.
+    # Same hostname as issuerBaseUrl below, without "https://". Needed for API token generation.
+    paisconfigurations.pais.vmware.com/cname: <pais-hostname>  
+    # Zone used for model endpoints that do not set spec.failureDomain.
+    # The controller sets this itself when the namespace has zones; keep it to pin the zone.
+    pais.vmware.com/default-failure-domain: zone0
+spec:
+  # Storage class used by all components. Must be assigned to this namespace.
+  defaultStorageClassName: vsan-default-storage-policy
+
+  auth:
+    providers:
+      - name: sc                                  # 2-8 lowercase alphanumeric characters
+        staticCredentials:
+          issuerBaseUrl: https://<pais-hostname>  # must resolve (DNS) to the ingress load balancer IP
+          credentialsSecretRef:
+            name: pais-static-credentials         # Secret 1 above
+            key: credentials.json
+          apiTokens:                              # without this block no API tokens are issued (interactive login only)
+            expirationDefault: 720h               # lifetime when a token request gives none
+            expirationMax: 8760h                  # longest lifetime a caller may request
+  database:                                       # PostgreSQL with the pgvector extension installed
+    host: <database-ip-or-hostname>
+    port: 5432
+    dbname: testdb
+    username: testuser                    # see "Database prerequisites" below
+    sslMode: Allow                                # Allow | Require | VerifyCA | VerifyFull
+    passwordRef:
+      name: pais-database                         # Secret 2 above
+      fieldPath: password                         # key holding the password; "ca.crt" is read from the same Secret
+
+  ingress:
+    serviceType: LoadBalancer                     # or ClusterIP
+    # tlsSecretRef:                               # optional: your own certificate for the ingress
+    #   name: <kubernetes.io/tls Secret with tls.crt and tls.key; must cover issuerBaseUrl's hostname>
+
+  vksControlPlane:                                # the VKS cluster that will host model endpoints
+    storageClassName: vsan-default-storage-policy
+    virtualMachineClassName: best-effort-medium   # control-plane VM only; model workers are sized per ModelEndpoint
+
+  upgradeStrategy:
+    automatic: {}
+
+# Database prerequisites (the setup job runs as the database user above):
+#   - the database exists, and the pgvector extension is installed in it:  CREATE EXTENSION vector;
+#     (needs a superuser; the job's own "CREATE EXTENSION IF NOT EXISTS" then does nothing)
+#   - the user can create roles (CREATEROLE) and create objects in the database. In this lab the user
+#     was made a superuser, which is more than a real deployment should grant.
+#
+# Optional sections not set here (see: kubectl explain paisconfigurations.spec):
+#   clientTls, nvidiaConfig, observability, runtimeConfig, worker

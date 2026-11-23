@@ -1,0 +1,15 @@
+apiVersion: pais.vmware.com/v1alpha1
+kind: ModelEndpoint
+metadata:
+  name: cpu-test
+  namespace: pais
+spec:
+  engine: LlamaCPP
+  type: Completions
+  routingName: cpu-test
+  replicas: 1
+  failureDomain: zone0
+  storageClassName: vsan-default-storage-policy
+  virtualMachineClassName: best-effort-large
+  model:
+    ociRef: <registry>/<project>/<model>:<tag>

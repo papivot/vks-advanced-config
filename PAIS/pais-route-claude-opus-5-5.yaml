@@ -1,0 +1,18 @@
+apiVersion: pais.vmware.com/v1alpha1
+kind: InferenceGatewayRoute
+metadata:
+  name: claude-opus-5-5
+  namespace: pais
+spec:
+  type: Completions
+  engine: OpenAI                         # any OpenAI-compatible chat completions API
+  matches:
+    routingName: claude-opus-5-5         # the model name your clients use
+  backend:
+    httpBaseUrl: https://api.anthropic.com/   # no /v1, PAIS appends it
+    modelId: claude-opus-5-5
+    tls:
+      verification: strict
+    auth:
+      apiTokenRef:
+        name: anthropic-api-key
