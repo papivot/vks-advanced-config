@@ -26,7 +26,7 @@ stringData:
     [
       {
         "userID": "test",
-        "username": "testuser",
+        "username": "test",
         "hash": "$6$J7DDi1Vjo8o/CcIU$ziy57OO4VBO37lzaztY4wuav1EbXwvdZ4qWUVKUAuQStXXCobmNHjVlp1SqnaACOZwK4HeOGCOs3U7ioTzMy5/"
       }
     ]
@@ -77,15 +77,12 @@ metadata:
   name: default
   namespace: pais
   annotations:
-    pais.vmware.com/default-failure-domain: zone0
-    ui.pais.vmware.com/pais-enablement-db: self-managed
-    ui.pais.vmware.com/pais-enablement-environment-connectivity: connected
     # FQDN the UI uses instead of the load balancer IP when switching between its components.
     # Same hostname as issuerBaseUrl below, without "https://". Needed for API token generation.
     paisconfigurations.pais.vmware.com/cname: <pais-hostname>  
-    # Zone used for model endpoints that do not set spec.failureDomain.
-    # The controller sets this itself when the namespace has zones; keep it to pin the zone.
     pais.vmware.com/default-failure-domain: zone0
+    ui.pais.vmware.com/pais-enablement-db: self-managed
+    ui.pais.vmware.com/pais-enablement-environment-connectivity: connected
 spec:
   # Storage class used by all components. Must be assigned to this namespace.
   defaultStorageClassName: vsan-default-storage-policy
