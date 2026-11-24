@@ -1,15 +1,27 @@
+# CPU-only ModelEndpoint for Private AI Services in namespace "pais".
+# Model: Qwen2.5-1.5B-Instruct, Q4_K_M (GGUF, about 1.1GB, Apache 2.0), pushed with `vcf pais models push`.
+#
+#   kubectl --context <ctx> apply -f pais-modelendpoint-cpu.yaml
+#
+# Applying this creates a node pool in the VKS cluster with a worker VM of the class below.
 apiVersion: pais.vmware.com/v1alpha1
 kind: ModelEndpoint
 metadata:
-  name: cpu-test
+  name: qwen2-5-1-5b-instruct
   namespace: pais
 spec:
-  engine: LlamaCPP
-  type: Completions
-  routingName: cpu-test
+  engine: LlamaCPP                  # CPU-capable engine (enum: Infinity, vLLM, LlamaCPP)
+  type: Completions                 # or Embeddings
+  routingName: qwen2.5-1.5b-instruct   # model id clients use, e.g. in /api/v1/compatibility/openai/v1/chat/completions
   replicas: 1
-  failureDomain: zone0
+  failureDomain: zone0              # the only zone in this namespace
   storageClassName: vsan-default-storage-policy
-  virtualMachineClassName: best-effort-large
+  virtualMachineClassName: best-effort-medium  # 2 vCPU / 8Gi, no GPU; use best-effort-large (4 CPU / 16Gi) for more headroom
   model:
-    ociRef: <registry>/<project>/<model>:<tag>
+    # Pushed with:  vcf pais models push --modelStore registry/project \
+    #                 --modelName something/qwen2.5-1.5b-instruct --tag q4_k_m
+    # Pinned by digest below; the tag form is ...qwen2.5-1.5b-instruct:q4_k_m
+    ociRef: registry/project/something/qwen2.5-1.5b-instruct@sha256:5a76dc1e47ee468eab15f90b5de6f57581e7cfdba35ce16f127d67c5cb2bf7c8
+    # The repository is public, so no pull secret is needed. For a private one:
+    # pullSecrets:
+    #   - name: <registry-pull-secret>    
